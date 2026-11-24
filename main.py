@@ -1,72 +1,87 @@
 #!/usr/bin/env python3
-"""Make the AI Judge Laugh: Developer Excuses.
+"""One-line developer excuse for the "Make the AI Judge Laugh" bounty.
 
-Writes one funny single-line excuse a developer gives when code breaks in
-production, to /output/entry.txt.
+The program emits a single excuse — the kind a developer blurts out when
+code that worked fine locally falls over in production — and saves it to
+``/output/entry.txt`` for grading.
 
-Standard library only; deterministic.
-
-The excuse (88 characters, one line):
+The excuse itself:
 
     The bug only happens in production because my laptop is too polite to
     tell me the truth.
 
-Gate: the entry text must be UTF-8 text of 1 to 200 characters, a single
-line, and not only white space. main() validates the line before writing,
-so a future edit that breaks the form fails loudly instead of silently
-submitting an invalid entry. The output file is written with plain open()
-and an explicit chmod 644, so the grader (a different user) can read it.
+The joke lands because the laptop gets a personality: it knew the truth
+the whole time and was simply too courteous to mention it. It stays in the
+developer's voice ("my laptop", "tell me"), names the classic
+works-on-my-machine gap ("only happens in production"), and stays tight
+at 88 characters — one sentence, well inside the 200-character gate.
 
-Why this line, against the published judge brief:
-
-- Funny first: it blames the laptop's manners, not the developer -- the
-  machine knew all along and was simply too polite to speak up.
-- On subject and in the developer's own mouth: "my laptop" is the dev
-  talking right after the production outage, dodging blame with charm.
-- Specific, not vague: "only happens in production" names the classic
-  works-on-my-machine gap, and "too polite to tell me the truth" gives
-  the laptop a personality.
-- Tight: one sentence, 88 of the 200 allowed characters, so it reads as
-  a blurted excuse rather than a paragraph.
+Only the standard library is used, and the run is deterministic: the same
+line is produced every time, validated before anything is written, and the
+output file is created with a plain ``open()`` followed by an explicit
+``chmod 0o644`` so the grader (which runs as a different user) can read it.
 """
 
 import os
 
-EXCUSE = (
+# The entry: one sentence, 88 characters, no trailing newline in the
+# constant itself (the newline is added when the file is written).
+ENTRY = (
     "The bug only happens in production because my laptop is too polite "
     "to tell me the truth."
 )
 
-# Maximum entry length in characters (competition gate: 1-200 chars).
-MAX_CHARS = 200
+MAX_LENGTH = 200  # competition gate: entries must be 1-200 characters
+OUTPUT_NAME = "entry.txt"
 
 
-def validate_entry(text: str) -> None:
-    """Check the excuse is one printable line and fits the 200-char gate."""
-    line = text.rstrip("\n")
-    if not line.strip():
-        raise ValueError("entry is empty or only white space")
-    if "\n" in line or "\r" in line:
-        raise ValueError("entry must be a single line")
-    if any(ord(ch) < 0x20 and ch not in ("\t",) for ch in line):
-        raise ValueError("entry contains control characters")
-    if len(line) > MAX_CHARS:
+def check_line(line):
+    """Raise ValueError unless *line* is a valid single-line entry.
+
+    A valid entry is non-empty, fits on one line, contains no control
+    characters, and stays within the competition's length gate.
+    """
+    stripped = line.strip()
+    if not stripped:
+        raise ValueError("entry must not be empty or only whitespace")
+    if len(line) != len(line.rstrip("\n")) or "\n" in line or "\r" in line:
+        raise ValueError("entry must be exactly one line")
+    if any(ord(c) < 32 for c in line):
+        raise ValueError("entry must not contain control characters")
+    if len(line) > MAX_LENGTH:
         raise ValueError(
-            f"entry is {len(line)} chars, over the {MAX_CHARS}-char gate"
+            "entry is %d characters, over the %d-character limit"
+            % (len(line), MAX_LENGTH)
         )
+    return stripped
 
 
-def main() -> None:
-    validate_entry(EXCUSE)
-    output_dir = os.environ.get("OUTPUT_DIR") or os.environ.get(
-        "MAKEFUN_OUTPUT_DIR", "/output"
-    )
-    os.makedirs(output_dir, exist_ok=True)
-    text = EXCUSE if EXCUSE.endswith("\n") else EXCUSE + "\n"
-    path = os.path.join(output_dir, "entry.txt")
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text)
+def output_directory():
+    """Resolve where entry.txt goes: env override, else /output."""
+    for var in ("OUTPUT_DIR", "MAKEFUN_OUTPUT_DIR"):
+        value = os.environ.get(var)
+        if value:
+            return value
+    return "/output"
+
+
+def write_entry(directory, line):
+    """Write *line* plus a trailing newline to entry.txt in *directory*.
+
+    Uses a plain open() and then chmod 644; no tempfile helpers, so the
+    resulting file is readable by the grader regardless of who runs this.
+    """
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, OUTPUT_NAME)
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(line + "\n")
     os.chmod(path, 0o644)
+    return path
+
+
+def main():
+    line = check_line(ENTRY)
+    write_entry(output_directory(), line)
 
 
 if __name__ == "__main__":
